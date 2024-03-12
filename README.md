@@ -1,6 +1,6 @@
-#### CPTS 360 Lab 4
+#### CPTS 360 Lab 3
 
-Base code and documentation for WSU CPTS360 Lab 4 (Kernel Programming)
+Base code and documentation for WSU CPTS360 Lab 3 (Kernel Programming)
 
 
 **Files:**

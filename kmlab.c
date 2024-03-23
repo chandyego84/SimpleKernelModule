@@ -36,11 +36,12 @@ MODULE_DESCRIPTION("CPTS360 Lab 3");
 /*Procfs GVs*/
 #define PROCFS_DIR "kmlab"
 #define PROCFS_NAME "status"
-#define KMLAB_MAX_SIZE 1024
+#define PROCFS_MAX_SIZE 1024
 
-// Struct holds information about our proc dir and proc file
+// Structs hold information about our proc dir and proc file
 static struct proc_dir_entry *proc_file, *proc_dir;
-static char proc_buffer[KMLAB_MAX_SIZE] = "";
+static char procfs_buffer[PROCFS_MAX_SIZE] = ""; // buffer used to store character for this module
+static unsigned long procfs_buffer_size = 0; // size of the buffer
 /*Procfs GVs*/
 
 /*Linked list GVs*/
@@ -56,21 +57,54 @@ static char proc_buffer[KMLAB_MAX_SIZE] = "";
 /*Spinlock GVs*/
 
 /*START -- Procfs Functions*/
+/*called when /proc file is read*/
 static ssize_t procfile_read(struct file *file_pointer, char __user *buffer,
                             size_t buffer_length, loff_t *offset) {
+    int len = sizeof(procfs_buffer_size);
+    ssize_t ret = len;
 
+    if (*offset >= len) {
+        return 0;
+    }
+    if (copy_to_user(buffer, procfs_buffer, len)) {
+        pr_info("copy_to_user failed\n");
+        ret = 0;
+    }
+    else {
+        pr_info("procfile read /proc/%s\n", PROCFS_NAME);
+        *offset += len;
+    }
+
+    return ret;
 }
 
+/*called when /proc file is written*/
 static ssize_t procfile_write(struct file *file, const char __user *buff,
                              size_t len, loff_t *off) {
+    // clear internal buffer
+    memset(&procfs_buffer[0], 0, sizeof(procfs_buffer));
 
+    procfs_buffer_size = len;
+
+    if (procfs_buffer_size > PROCFS_MAX_SIZE) {
+        procfs_buffer_size = PROCFS_MAX_SIZE;
+    }
+
+    if (copy_from_user(procfs_buffer, buff, procfs_buffer_size)) {
+        return -EFAULT;
+    }
+
+    procfs_buffer[procfs_buffer_size & (PROCFS_MAX_SIZE - 1)] = '\0';
+    *off += procfs_buffer_size;
+    pr_info("procfile write %s\n", procfs_buffer);
+
+    return procfs_buffer_size;
 }
 
 static const struct proc_ops proc_file_fops = {
         .proc_read = procfile_read,
         .proc_write = procfile_write,
 };
-
 /*END -- Procfs Functions*/
 
 /*START -- Linked List Functions*/
@@ -112,10 +146,13 @@ int __init kmlab_init(void)
 void __exit kmlab_exit(void)
 {
    #ifdef DEBUG
-   pr_info("GOODBYE! KMLAB MODULE UNLOADING\n");
+   pr_info("KMLAB MODULE UNLOADING\n");
    #endif
-   // Insert your code here ...
-   
+
+    proc_remove(proc_file);
+    pr_info("file /proc/%s/%s removed\n", PROCFS_DIR, PROCFS_NAME);
+    proc_remove(proc_dir);
+    pr_info("dir /proc/%s removed\n", PROCFS_DIR);
    
 
    pr_info("KMLAB MODULE UNLOADED\n");

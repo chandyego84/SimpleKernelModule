@@ -9,9 +9,14 @@
 // Register process with kernel module
 void register_process(unsigned int pid)
 {
-    
-     // Insert your code here ...
-   
+    FILE* file_ptr = fopen("/proc/kmlab/status", "w");
+    if (file_ptr == NULL) {
+        printf("Error opening file '/proc/kmlab/status' when registering process\n");
+    }
+
+    /*register itself by writing PID to the /proc filesystem*/
+    fprintf(file_ptr, "%d", pid);
+    fclose(file_ptr);
 }
 
 int main(int argc, char* argv[])

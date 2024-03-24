@@ -12,9 +12,11 @@ void register_process(unsigned int pid)
     FILE* file_ptr = fopen("/proc/kmlab/status", "w");
     if (file_ptr == NULL) {
         printf("Error opening file '/proc/kmlab/status' when registering process\n");
+        exit(1);
     }
 
     /*register itself by writing PID to the /proc filesystem*/
+    // printf("PID being registered %d\n", pid); // for debugging verification of correct PID being registered
     fprintf(file_ptr, "%d", pid);
     fclose(file_ptr);
 }

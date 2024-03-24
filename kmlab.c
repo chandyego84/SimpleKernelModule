@@ -14,6 +14,8 @@
 /*Needed for procfs*/
 
 /*Needed for linked list*/
+#include <linux/types.h>
+#include <linux/list.h>
 /*Needed for linked list*/
 
 /*Needed for timers*/
@@ -45,6 +47,14 @@ static unsigned long procfs_buffer_size = 0; // size of the buffer
 /*Procfs GVs*/
 
 /*Linked list GVs*/
+struct ll_struct {
+    struct list_head list;
+    long int cpu_value;
+    int pid;
+};
+
+struct list_head process_list; // head of linked list storing each process and info
+
 /*Linked list GVs*/
 
 /*Timer GVs*/
@@ -91,6 +101,8 @@ static ssize_t procfile_write(struct file *file, const char __user *buff,
     }
 
     if (copy_from_user(procfs_buffer, buff, procfs_buffer_size)) {
+        // copy from user failed
+
         return -EFAULT;
     }
 
@@ -108,6 +120,36 @@ static const struct proc_ops proc_file_fops = {
 /*END -- Procfs Functions*/
 
 /*START -- Linked List Functions*/
+// Adds a node to the tail of the linked list
+int add_node(int pid) {
+    struct ll_struct *new_node = kmalloc((size_t) (sizeof(struct ll_struct)), GFP_KERNEL);
+    if (!new_node) {
+        pr_info("Memory allocation for new node failed\n");
+        return 1;
+    }
+
+    new_node->cpu_value = 0;
+    new_node->pid = pid;
+    list_add_tail(&(new_node->list), &process_list);
+    return 0;
+}
+
+// Removes a node from the linked list
+int delete_node(int pid) {
+    struct ll_struct *entry = NULL, *n;
+
+    list_for_each_entry_safe(entry, n, &process_list, list) {
+        if (entry->pid == pid) {
+            list_del(&(entry->list));
+            kfree(entry);
+            return 0;
+        }
+    }
+
+    pr_info("Could not find node with pid %d\n", pid);
+    return 1;
+}
+
 /*END -- Linked List Functions*/
 
 /*START -- Timer Functions*/
@@ -137,8 +179,11 @@ int __init kmlab_init(void)
        return -ENOMEM;
    }
    pr_info("/proc/%s/%s created\n", PROCFS_DIR, PROCFS_NAME);
-   
-   pr_info("KMLAB MODULE LOADED\n");
+
+   // Starting linked list
+    INIT_LIST_HEAD(&process_list);
+
+    pr_info("KMLAB MODULE LOADED\n");
    return 0;   
 }
 

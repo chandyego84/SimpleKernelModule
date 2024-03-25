@@ -19,6 +19,8 @@
 /*Needed for linked list*/
 
 /*Needed for timers*/
+#include <linux/timer.h>
+#include <linux/jiffies.h>
 /*Needed for timers*/
 
 /*Needed for work queue*/
@@ -54,10 +56,11 @@ struct ll_struct {
 };
 
 struct list_head process_list; // head of linked list storing each process and info
-
 /*Linked list GVs*/
 
 /*Timer GVs*/
+static struct timer_list my_timer;
+int time_interval = 5000;
 /*Timer GVs*/
 
 /*Work queue GVs*/
@@ -95,6 +98,16 @@ int delete_node(int pid) {
 
     printk(KERN_ERR "Could not find node with pid %d to delete\n", pid);
     return 1;
+}
+
+// Delete the linked list
+void delete_list(void) {
+    struct ll_struct *entry, *tmp;
+
+    list_for_each_entry_safe(entry, tmp, &process_list, list) {
+        list_del(&entry->list);
+        kfree(entry);
+    }
 }
 
 // Traverse the linked list, displaying each node info
@@ -194,6 +207,12 @@ static const struct proc_ops proc_file_fops = {
 /*END -- Procfs Functions*/
 
 /*START -- Timer Functions*/
+void timer_callback(struct timer_list *timer) {
+    printk(KERN_INFO "This line is printed every %d ms\n", time_interval);
+
+    // this makes a periodic timer
+    mod_timer(&my_timer, jiffies + msecs_to_jiffies(time_interval));
+}
 /*END -- Timer Functions*/
 
 /*START -- Work Queue/Spinlock Functions*/
@@ -206,7 +225,7 @@ int __init kmlab_init(void)
    pr_info("KMLAB MODULE LOADING\n");
    #endif
 
-    // Create proc filesystem entries
+    /*PROCFS ACTIONS*/
     proc_dir = proc_mkdir(PROCFS_DIR, NULL);
     if (proc_dir == NULL) {
         pr_alert("Error: Could not initialize dir /proc/%s\n", PROCFS_DIR);
@@ -221,8 +240,13 @@ int __init kmlab_init(void)
    }
    pr_info("/proc/%s/%s created\n", PROCFS_DIR, PROCFS_NAME);
 
-   // Starting linked list
+   /*LIST ACTIONS*/
     INIT_LIST_HEAD(&process_list);
+
+    /*TIMER ACTIONS*/
+    // set up timer for initial use
+    timer_setup(&my_timer, timer_callback, 0);
+    mod_timer(&my_timer, jiffies + msecs_to_jiffies(time_interval));
 
     pr_info("KMLAB MODULE LOADED\n");
    return 0;   
@@ -235,11 +259,17 @@ void __exit kmlab_exit(void)
    pr_info("KMLAB MODULE UNLOADING\n");
    #endif
 
+    /*PROCFS ACTIONS*/
     proc_remove(proc_file);
     pr_info("file /proc/%s/%s removed\n", PROCFS_DIR, PROCFS_NAME);
     proc_remove(proc_dir);
     pr_info("dir /proc/%s removed\n", PROCFS_DIR);
-   
+
+    /*LIST ACTIONS*/
+    delete_list();
+
+    /*TIMER ACTIONS*/
+    del_timer(&my_timer);
 
    pr_info("KMLAB MODULE UNLOADED\n");
 }

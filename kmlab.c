@@ -111,21 +111,37 @@ void show_list(void) {
 /*END -- Linked List Functions*/
 
 /*START -- Procfs Functions*/
-/*called when /proc file is read*/
+/* Called when /proc file is read
+ * Prints a list of all registered PIDs in the system and their corresponding userspace CPU times
+ * Format:
+ * PID1: <CPU Time of PID1>
+ * PID2: <CPU Time of PID2>
+ * */
 static ssize_t procfile_read(struct file *file_pointer, char __user *buffer,
                             size_t buffer_length, loff_t *offset) {
-    int len = sizeof(procfs_buffer_size);
+    struct ll_struct *entry = NULL;
+    char temp[50] = "";
+    int len = sizeof(procfs_buffer);
     ssize_t ret = len;
 
-    if (*offset >= len) {
-        return 0;
+    // clear internal buffer
+    memset(&procfs_buffer[0], 0, sizeof(procfs_buffer));
+
+    // store info of each process in the list to the buffer
+    list_for_each_entry(entry, &process_list, list) {
+        snprintf(temp, sizeof(procfs_buffer), "PID %d: CPU Time %ld\n", entry->pid, entry->cpu_value);
+        strcat(procfs_buffer, temp);
+        memset(&temp[0], 0, sizeof(temp));
     }
-    if (copy_to_user(buffer, procfs_buffer, len)) {
-        pr_info("copy_to_user failed\n");
-        ret = 0;
+
+    if (*offset >= sizeof(procfs_buffer)) {
+        return -EBUSY;
+    }
+    if (copy_to_user(buffer, procfs_buffer, sizeof(procfs_buffer))) {
+        return -EBUSY;
     }
     else {
-        pr_info("procfile read /proc/%s\n", PROCFS_NAME);
+        printk(KERN_INFO "procfile read /proc/%s/%s:\n%s", PROCFS_DIR, PROCFS_NAME, procfs_buffer);
         *offset += len;
     }
 
@@ -142,6 +158,9 @@ static ssize_t procfile_write(struct file *file, const char __user *buff,
     int pid = 0;
     int ret;
     procfs_buffer_size = len;
+
+    // clear internal buffer
+    memset(&procfs_buffer[0], 0, sizeof(procfs_buffer));
 
     if (procfs_buffer_size > PROCFS_MAX_SIZE) {
         // cap the userspace input if it exceeds max buffer size

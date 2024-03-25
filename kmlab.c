@@ -24,9 +24,11 @@
 /*Needed for timers*/
 
 /*Needed for work queue*/
+#include <linux/workqueue.h>
 /*Needed for work queue*/
 
 /*Needed for spinlock*/
+#include <linux/spinlock.h>
 /*Needed for spinlock*/
 
 MODULE_LICENSE("GPL");
@@ -64,9 +66,12 @@ int time_interval = 5000;
 /*Timer GVs*/
 
 /*Work queue GVs*/
+static struct workqueue_struct *queue = NULL;
+static struct work_struct work;
 /*Work queue GVs*/
 
 /*Spinlock GVs*/
+static DEFINE_SPINLOCK(sl);
 /*Spinlock GVs*/
 
 /*START -- Linked List Functions*/
@@ -110,6 +115,25 @@ void delete_list(void) {
     }
 }
 
+// Update cpu values in the list
+void update_list_cpu(void) {
+    struct ll_struct *entry, *tmp;
+    int ret = 0;
+    unsigned long cpu_time = 0;
+
+    list_for_each_entry_safe(entry, tmp, &process_list, list) {
+        ret = get_cpu_use(entry->pid, &cpu_time);
+        if (ret == -1) {
+            // process has terminated -> remove from list
+            delete_node(entry->pid);
+            printk(KERN_INFO "Process %d has terminated and removed from list\n", entry->pid);
+        }
+        else {
+            entry->cpu_value = cpu_time;
+        }
+    }
+}
+
 // Traverse the linked list, displaying each node info
 void show_list(void) {
     struct ll_struct *entry = NULL;
@@ -118,9 +142,6 @@ void show_list(void) {
         printk(KERN_INFO "%d: %ld\n", entry->pid, entry->cpu_value);
     }
 }
-
-// Delete processes that have expired from the linked list
-
 /*END -- Linked List Functions*/
 
 /*START -- Procfs Functions*/
@@ -209,6 +230,7 @@ static const struct proc_ops proc_file_fops = {
 /*START -- Timer Functions*/
 void timer_callback(struct timer_list *timer) {
     printk(KERN_INFO "This line is printed every %d ms\n", time_interval);
+    schedule_work(&work); // see work_handler for details
 
     // this makes a periodic timer
     mod_timer(&my_timer, jiffies + msecs_to_jiffies(time_interval));
@@ -216,6 +238,20 @@ void timer_callback(struct timer_list *timer) {
 /*END -- Timer Functions*/
 
 /*START -- Work Queue/Spinlock Functions*/
+// Updates the CPU times of processes in the list
+static void work_handler(struct work_struct *data) {
+    printk(KERN_INFO "KM_WQ work handler function\n");
+
+    unsigned long flags;
+    spin_lock_irqsave(&sl, flags);
+
+    printk(KERN_INFO "locked spinlock - updating the CPU times of processes\n");
+    // this code uses 100% CPU time
+    update_list_cpu();
+
+    spin_unlock_irqrestore(&sl, flags);
+    printk(KERN_INFO "unlocked spinlock");
+}
 /*END -- Work Queue/Spinlock Functions*/
 
 // kmlab_init - Called when module is loaded
@@ -248,6 +284,10 @@ int __init kmlab_init(void)
     timer_setup(&my_timer, timer_callback, 0);
     mod_timer(&my_timer, jiffies + msecs_to_jiffies(time_interval));
 
+    /*WORK QUEUE ACTIONS*/
+    queue = alloc_workqueue("KM_WQ", WQ_UNBOUND, 1);
+    INIT_WORK(&work, work_handler);
+
     pr_info("KMLAB MODULE LOADED\n");
    return 0;   
 }
@@ -270,6 +310,9 @@ void __exit kmlab_exit(void)
 
     /*TIMER ACTIONS*/
     del_timer(&my_timer);
+
+    /*WORK QUEUE ACTIONS*/
+    destroy_workqueue(queue);
 
    pr_info("KMLAB MODULE UNLOADED\n");
 }

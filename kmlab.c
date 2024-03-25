@@ -115,6 +115,15 @@ void delete_list(void) {
     }
 }
 
+// Traverse the linked list, displaying each node info
+void show_list(void) {
+    struct ll_struct *entry = NULL;
+
+    list_for_each_entry(entry, &process_list, list) {
+        printk(KERN_INFO "%d: %ld\n", entry->pid, entry->cpu_value);
+    }
+}
+
 // Update cpu values in the list
 void update_list_cpu(void) {
     struct ll_struct *entry, *tmp;
@@ -134,14 +143,7 @@ void update_list_cpu(void) {
     }
 }
 
-// Traverse the linked list, displaying each node info
-void show_list(void) {
-    struct ll_struct *entry = NULL;
 
-    list_for_each_entry(entry, &process_list, list) {
-        printk(KERN_INFO "%d: %ld\n", entry->pid, entry->cpu_value);
-    }
-}
 /*END -- Linked List Functions*/
 
 /*START -- Procfs Functions*/
@@ -244,8 +246,8 @@ static void work_handler(struct work_struct *data) {
 
     unsigned long flags;
     spin_lock_irqsave(&sl, flags);
-
     printk(KERN_INFO "locked spinlock - updating the CPU times of processes\n");
+
     // this code uses 100% CPU time
     update_list_cpu();
 
